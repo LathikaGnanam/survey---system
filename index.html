@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback Hub</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><h1>Feedback Hub</h1><a href="admin.html">Admin</a></header>
+<main id="app"></main>
+<script>
+const app=document.getElementById('app');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function home(){
+  const list=await (await fetch('/api/surveys')).json();
+  app.innerHTML='<h2>Open surveys</h2>'+(list.length?list.map(s=>`<div class="card"><h3>${esc(s.title)}</h3><p class="muted">${esc(s.description)}</p><button onclick='openSurvey(${s.id})'>Take survey</button></div>`).join(''):'<div class="card">No surveys yet. An admin can create one from the Admin page.</div>');
+  window._list=list;
+}
+function openSurvey(id){
+  const s=window._list.find(x=>x.id===id);
+  const qs=s.questions.map((q,i)=>{
+    let inp='';
+    if(q.type==='rating') inp='<div class="stars">'+[1,2,3,4,5].map(n=>`<label><input type="radio" name="q${i}" value="${n}">${n}</label>`).join('')+'</div>';
+    else if(q.type==='choice') inp=q.options.map(o=>`<label class="opt"><input type="radio" name="q${i}" value="${esc(o)}">${esc(o)}</label>`).join('');
+    else inp=`<textarea name="q${i}" placeholder="Your answer (optional)"></textarea>`;
+    return `<label>${esc(q.text)}</label>${inp}`;
+  }).join('');
+  app.innerHTML=`<div class="card"><h2>${esc(s.title)}</h2><p class="muted">${esc(s.description)}</p><div id="f">${qs}</div><div class="row"><button onclick="submitSurvey(${id})">Send feedback</button><button class="ghost" onclick="home()">Back</button></div><div id="msg"></div></div>`;
+}
+async function submitSurvey(id){
+  const body=new URLSearchParams();
+  document.querySelectorAll('#f textarea').forEach(t=>body.set(t.name,t.value));
+  document.querySelectorAll('#f input:checked').forEach(r=>body.set(r.name,r.value));
+  const r=await fetch('/api/respond?id='+id,{method:'POST',body});
+  const d=await r.json();
+  if(r.ok) app.innerHTML='<div class="card"><h2>Thank you!</h2><p>Your feedback was recorded.</p><button onclick="home()">Back to surveys</button></div>';
+  else document.getElementById('msg').innerHTML=`<div class="msg bad">${esc(d.error)}</div>`;
+}
+home();
+</script></body></html>
